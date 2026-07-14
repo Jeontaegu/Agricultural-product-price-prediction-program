@@ -49,10 +49,6 @@ Backend & AI (데이터 수집용 파이썬 스크립트 제공됨 - data_collec
 
 Language: Python 3.9+
 
-Framework (예정): FastAPI (예측 결과를 프론트엔드에 전달하기 위한 REST API 구축)
-
-AI/ML (예정): LightGBM, XGBoost, 또는 Prophet (시계열 데이터 기반 가격 예측 모델링)
-
 Data Processing: Pandas, requests, lxml (웹 스크래핑 방식 활용 시)
 
 📊 데이터 출처 (Data Sources)
