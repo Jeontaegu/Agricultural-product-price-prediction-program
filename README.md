@@ -5,6 +5,11 @@
 
 ##스크린샷
 
+<img width="482" height="905" alt="스크린샷 2026-07-14 143947" src="https://github.com/user-attachments/assets/72c82218-c9fa-466b-9a3a-b95bc5ceddba" />
+<img width="476" height="912" alt="스크린샷 2026-07-14 144001" src="https://github.com/user-attachments/assets/68834600-d7d1-461f-a52e-ab23507252d3" />
+<img width="475" height="910" alt="스크린샷 2026-07-14 144011" src="https://github.com/user-attachments/assets/4e57089f-06c0-4769-99aa-0fed3059873c" />
+<img width="477" height="906" alt="스크린샷 2026-07-14 144021" src="https://github.com/user-attachments/assets/5d01f600-f3ea-4556-ab10-ef146a5a8ee5" />
+
 
 🎯 기획 배경 및 타겟 사용자
 
