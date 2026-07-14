@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>농산물 가격 예측 알리미</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for rendering the line chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #e5e7eb; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 모바일 화면 뷰포트 고정 (PC에서도 모바일처럼 보이게) */
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background-color: #f9fafb;
+            min-height: 100vh;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            position: relative;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+<div class="app-container flex flex-col">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-green-600 to-green-500 text-white p-5 rounded-b-3xl shadow-lg z-10">
+        <div class="flex justify-between items-center mb-2">
+            <h1 class="text-xl font-black"><i class="fa-solid fa-seedling mr-2"></i>농산물 가격 예측 알리미</h1>
+            <div class="flex gap-3">
+                <button onclick="openSettings()" class="text-white hover:text-green-200" title="API 키 설정"><i class="fa-solid fa-gear text-xl"></i></button>
+                <button class="text-white hover:text-green-200"><i class="fa-solid fa-bell text-xl"></i></button>
+            </div>
+        </div>
+        <p class="text-green-50 text-sm font-medium opacity-90">AI 기반 소매가격 예측 및 구매 가이드</p>
+    </header>
+
+    <!-- 품목 선택 탭 (Python 코드의 crop_config 매핑 반영) -->
+    <nav class="flex overflow-x-auto space-x-3 p-4 no-scrollbar mt-1">
+        <button onclick="loadCropData('cabbage')" id="tab-cabbage" class="crop-tab flex-shrink-0 px-5 py-2.5 rounded-full font-bold transition-all bg-green-600 text-white shadow-md">
+            🥬 배추
+        </button>
+        <button onclick="loadCropData('radish')" id="tab-radish" class="crop-tab flex-shrink-0 px-5 py-2.5 rounded-full font-bold transition-all bg-white text-gray-500 border border-gray-200 hover:bg-gray-50">
+            🥕 무
+        </button>
+        <button onclick="loadCropData('garlic')" id="tab-garlic" class="crop-tab flex-shrink-0 px-5 py-2.5 rounded-full font-bold transition-all bg-white text-gray-500 border border-gray-200 hover:bg-gray-50">
+            🧄 마늘
+        </button>
+        <button onclick="loadCropData('apple')" id="tab-apple" class="crop-tab flex-shrink-0 px-5 py-2.5 rounded-full font-bold transition-all bg-white text-gray-500 border border-gray-200 hover:bg-gray-50">
+            🍎 사과
+        </button>
+    </nav>
+
+    <main class="flex-1 overflow-y-auto pb-8">
+        
+        <!-- 데이터 파이프라인 출처 상태 (Python 스크립트 연결 시뮬레이션) -->
+        <div class="mx-4 mb-2 flex items-center justify-between text-[11px] text-gray-400 font-medium bg-gray-100 p-2 rounded-lg border border-gray-200">
+            <div class="flex items-center gap-1.5">
+                <span class="relative flex h-2 w-2">
+                  <span id="sync-status-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span id="sync-status-dot" class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span id="sync-status-text">데이터 동기화 완료 (KAMIS & 기상청)</span>
+            </div>
+            <div id="update-time">오늘 08:00 기준</div>
+        </div>
+
+        <!-- 가격 정보 카드 -->
+        <div class="bg-white mx-4 my-2 p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+            <!-- 배경 데코 -->
+            <div class="absolute -right-4 -top-4 w-20 h-20 bg-green-50 rounded-full opacity-50"></div>
+            
+            <div class="flex justify-between items-center mb-5 relative z-10">
+                <h2 id="item-title" class="text-xl font-black text-gray-800">배추 (1포기)</h2>
+                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md font-bold border border-gray-200">소매 전국평균</span>
+            </div>
+            
+            <div class="flex justify-between items-end mb-4 relative z-10">
+                <div>
+                    <p class="text-xs text-gray-500 font-bold mb-1">오늘 실제 가격</p>
+                    <p id="price-today" class="text-2xl font-bold text-gray-400 line-through decoration-gray-300">4,500원</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-purple-600 font-black mb-1 bg-purple-50 inline-block px-2 py-0.5 rounded-md"><i class="fa-solid fa-robot"></i> AI 예측 내일 가격</p>
+                    <div class="flex items-center justify-end gap-2 mt-1">
+                        <p id="price-tomorrow" class="text-3xl font-black text-gray-800">4,200원</p>
+                        <span id="price-diff" class="text-sm font-black flex items-center gap-0.5">
+                            <i class="fa-solid fa-caret-down"></i> 300원
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 주산지 날씨 연동 정보 (Python 스크립트의 stn_id 데이터 활용 시뮬레이션) -->
+            <div class="border-t border-gray-100 pt-3 mt-2 flex items-center justify-between">
+                <div class="text-xs text-gray-500 font-medium">
+                    <i class="fa-solid fa-location-dot text-gray-400 mr-1"></i>
+                    주산지 <span id="weather-location" class="font-bold text-gray-700">대관령(100)</span> 최근 기상 반영
+                </div>
+                <div id="weather-condition" class="text-xs font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                    <i class="fa-solid fa-cloud-showers-heavy"></i> 강수량 15mm
+                </div>
+            </div>
+        </div>
+
+        <!-- 소비자 가이드 멘트 -->
+        <div class="mx-4 mb-5">
+            <div id="guide-box" class="p-4 rounded-2xl flex items-start gap-3 transition-colors duration-300 shadow-sm border">
+                <div id="guide-icon" class="mt-0.5 text-xl"></div>
+                <div>
+                    <p id="guide-title" class="font-black text-sm mb-1"></p>
+                    <p id="guide-text" class="text-[13px] leading-relaxed font-medium opacity-90"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 차트 시각화 영역 -->
+        <div class="bg-white mx-4 mb-6 p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-black text-gray-800 text-sm">최근 2주 가격 추이 및 예측</h3>
+                <span class="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded">단위: 원</span>
+            </div>
+            <div class="relative h-60 w-full">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </div>
+        
+    </main>
+
+    <!-- API 키 설정 모달 (기본 숨김) -->
+    <div id="settings-modal" class="hidden absolute inset-0 z-50 bg-black bg-opacity-60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative">
+            <button onclick="closeSettings()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fa-solid fa-key mr-2 text-green-500"></i>API 키 설정</h3>
+            <p class="text-xs text-gray-500 mb-4">공공데이터 연동을 위해 발급받은 API 키를 입력해주세요.<br>(브라우저 로컬 환경에만 안전하게 저장됩니다.)</p>
+            
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-700 mb-1">KAMIS Open API 키 (cert_key)</label>
+                <input type="text" id="kamis-key-input" class="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="KAMIS API 키 입력">
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-gray-700 mb-1">기상청 공공데이터 API 키 (Decoding)</label>
+                <input type="text" id="kma-key-input" class="w-full border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" placeholder="기상청 API 키 입력">
+            </div>
+            
+            <button onclick="saveApiKeys()" class="w-full bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-colors">
+                저장하기
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- 0. API 키 관리 로직 ---
+    function openSettings() {
+        document.getElementById('settings-modal').classList.remove('hidden');
+        document.getElementById('kamis-key-input').value = localStorage.getItem('kamisApiKey') || '';
+        document.getElementById('kma-key-input').value = localStorage.getItem('kmaApiKey') || '';
+    }
+
+    function closeSettings() {
+        document.getElementById('settings-modal').classList.add('hidden');
+    }
+
+    function saveApiKeys() {
+        const kamisKey = document.getElementById('kamis-key-input').value.trim();
+        const kmaKey = document.getElementById('kma-key-input').value.trim();
+        
+        localStorage.setItem('kamisApiKey', kamisKey);
+        localStorage.setItem('kmaApiKey', kmaKey);
+        
+        // 커스텀 모달 알림 대신 간단한 브라우저 알림(UI 제약상 최소화)
+        // 화면 동기화 상태 갱신
+        updateSyncStatus();
+        closeSettings();
+    }
+
+    function updateSyncStatus() {
+        const hasKamis = localStorage.getItem('kamisApiKey');
+        const hasKma = localStorage.getItem('kmaApiKey');
+        const statusText = document.getElementById('sync-status-text');
+        const statusDot = document.getElementById('sync-status-dot');
+        const statusPing = document.getElementById('sync-status-ping');
+        
+        if (hasKamis && hasKma) {
+            statusText.innerText = '데이터 동기화 대기 중 (API 연결)';
+            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-green-500';
+            statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75';
+        } else {
+            statusText.innerText = '시뮬레이션 모드 (API 키 미설정)';
+            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-gray-400';
+            statusPing.className = 'hidden';
+        }
+    }
+
+    // --- 1. Python 데이터 수집 스크립트 기반 Configuration ---
+    // 백엔드(Python)에서 크롤링/API로 수집하는 품목별 주산지 및 기본 정보
+    const pythonConfig = {
+        cabbage: { name: "배추 (1포기)", stnName: "강원 대관령", stnId: "100", weather: "최근 강수량 15mm", weatherType: "rain" },
+        radish:  { name: "무 (1개)", stnName: "제주 서귀포", stnId: "184", weather: "태풍 특보/강풍", weatherType: "storm" },
+        garlic:  { name: "깐마늘 (1kg)", stnName: "경북 의성", stnId: "278", weather: "일조량 양호", weatherType: "sun" },
+        apple:   { name: "사과 (후지 10개)", stnName: "충북 충주", stnId: "131", weather: "일교차 큼 (12℃)", weatherType: "temp" }
+    };
+
+    // --- 2. 가상 데이터 생성 (백엔드 AI 예측 모델 결과 시뮬레이션) ---
+    function generatePredictionData(cropId) {
+        const config = pythonConfig[cropId];
+        let todayPrice, tomorrowPrice, pastPrices, guideTitle, guideText, trend;
+
+        // 품목별 시나리오 설정
+        if (cropId === 'cabbage') {
+            todayPrice = 4500; tomorrowPrice = 4100; // 하락
+            pastPrices = [4800, 4850, 4900, 5100, 5000, 4900, 4800, 4750, 4700, 4600, 4650, 4600, 4550, 4500];
+            trend = 'down';
+            guideTitle = "구매를 내일로 미루세요!";
+            guideText = "주산지인 대관령에 비가 내려 출하량이 일시 증가했습니다. 내일 소매 가격이 약 400원 하락할 것으로 AI가 예측하고 있습니다.";
+        } else if (cropId === 'radish') {
+            todayPrice = 2100; tomorrowPrice = 2450; // 상승
+            pastPrices = [1900, 1900, 1850, 1950, 2000, 1950, 2000, 2050, 2000, 2100, 2050, 2100, 2050, 2100];
+            trend = 'up';
+            guideTitle = "오늘 미리 구매하시는 것이 유리합니다!";
+            guideText = "제주 지역 태풍/강풍 특보로 인해 내일 산지 작업이 중단될 예정입니다. 반입량 감소로 내일 가격 급등이 예상됩니다.";
+        } else if (cropId === 'garlic') {
+            todayPrice = 8500; tomorrowPrice = 8500; // 보합
+            pastPrices = [8600, 8550, 8500, 8500, 8450, 8500, 8550, 8500, 8500, 8500, 8450, 8500, 8500, 8500];
+            trend = 'flat';
+            guideTitle = "가격 변동이 거의 없습니다.";
+            guideText = "의성 지역 일조량이 양호하며, 저장 마늘 방출로 인해 가격이 안정적입니다. 필요하실 때 편하게 구매하세요.";
+        } else {
+            todayPrice = 28000; tomorrowPrice = 28800; // 완만 상승
+            pastPrices = [26000, 26500, 26200, 26800, 27000, 27500, 27200, 27600, 27500, 27800, 27900, 28000, 27900, 28000];
+            trend = 'up';
+            guideTitle = "서서히 가격이 오르고 있습니다.";
+            guideText = "충주 지역 일교차가 커져 당도는 높아졌으나, 전체 재배면적 감소(통계청 데이터 반영) 여파로 가격 오름세가 지속됩니다.";
+        }
+
+        return { ...config, todayPrice, tomorrowPrice, pastPrices, trend, guideTitle, guideText };
+    }
+
+    let priceChart = null; // Chart.js 인스턴스
+
+    // X축 날짜 라벨 생성
+    function generateLabels() {
+        const labels = [];
+        const today = new Date();
+        for (let i = 13; i >= 0; i--) {
+            let d = new Date(today);
+            d.setDate(today.getDate() - i);
+            labels.push(i === 0 ? '오늘' : `${d.getMonth()+1}/${d.getDate()}`);
+        }
+        labels.push('내일(AI)');
+        return labels;
+    }
+
+    const chartLabels = generateLabels();
+
+    // --- 3. 화면 UI 업데이트 함수 ---
+    function loadCropData(cropId) {
+        // 1. 탭 스타일 변경
+        document.querySelectorAll('.crop-tab').forEach(btn => {
+            btn.className = "crop-tab flex-shrink-0 px-5 py-2.5 rounded-full font-bold transition-all bg-white text-gray-500 border border-gray-200 hover:bg-gray-50";
+        });
+        document.getElementById(`tab-${cropId}`).className = "crop-tab flex-shrink-0 px-5 py-2.5 rounded-full font-bold transition-all bg-green-600 text-white shadow-md";
+
+        // 2. 데이터 불러오기
+        const data = generatePredictionData(cropId);
+
+        // 3. 텍스트 업데이트
+        document.getElementById('item-title').innerText = data.name;
+        document.getElementById('price-today').innerText = data.todayPrice.toLocaleString() + '원';
+        document.getElementById('price-tomorrow').innerText = data.tomorrowPrice.toLocaleString() + '원';
+        
+        document.getElementById('weather-location').innerText = `${data.stnName}(${data.stnId})`;
+        const weatherEl = document.getElementById('weather-condition');
+        weatherEl.innerText = data.weather;
+        
+        // 날씨 아이콘 세팅
+        if(data.weatherType === 'rain') weatherEl.innerHTML = `<i class="fa-solid fa-cloud-showers-heavy mr-1"></i> ${data.weather}`;
+        else if(data.weatherType === 'storm') weatherEl.innerHTML = `<i class="fa-solid fa-hurricane mr-1"></i> ${data.weather}`;
+        else if(data.weatherType === 'sun') weatherEl.innerHTML = `<i class="fa-solid fa-sun mr-1"></i> ${data.weather}`;
+        else weatherEl.innerHTML = `<i class="fa-solid fa-temperature-half mr-1"></i> ${data.weather}`;
+
+        // 4. 가격 증감에 따른 UI 동적 스타일링 (소비자 친화적 색상 적용: 하락=파랑(좋음), 상승=빨강(주의))
+        const diff = data.tomorrowPrice - data.todayPrice;
+        const diffEl = document.getElementById('price-diff');
+        const guideBox = document.getElementById('guide-box');
+        const guideIcon = document.getElementById('guide-icon');
+        const priceTomEl = document.getElementById('price-tomorrow');
+        
+        document.getElementById('guide-title').innerText = data.guideTitle;
+        document.getElementById('guide-text').innerText = data.guideText;
+
+        if (data.trend === 'down' || diff < 0) {
+            // 하락 (소비자에게 좋음 -> 파란색)
+            diffEl.innerHTML = `<i class="fa-solid fa-caret-down"></i> ${Math.abs(diff).toLocaleString()}원`;
+            diffEl.className = "text-sm font-black flex items-center gap-0.5 text-blue-600 bg-blue-100 px-2 py-0.5 rounded";
+            priceTomEl.className = "text-3xl font-black text-blue-700";
+            
+            guideBox.className = "p-4 rounded-2xl flex items-start gap-3 transition-colors duration-300 shadow-sm border border-blue-200 bg-blue-50 text-blue-900";
+            guideIcon.innerHTML = `<i class="fa-solid fa-face-smile-beam text-blue-600"></i>`;
+        } else if (data.trend === 'up' || diff > 0) {
+            // 상승 (소비자에게 부담 -> 빨간색)
+            diffEl.innerHTML = `<i class="fa-solid fa-caret-up"></i> ${Math.abs(diff).toLocaleString()}원`;
+            diffEl.className = "text-sm font-black flex items-center gap-0.5 text-red-600 bg-red-100 px-2 py-0.5 rounded";
+            priceTomEl.className = "text-3xl font-black text-red-600";
+            
+            guideBox.className = "p-4 rounded-2xl flex items-start gap-3 transition-colors duration-300 shadow-sm border border-red-200 bg-red-50 text-red-900";
+            guideIcon.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-500"></i>`;
+        } else {
+            // 보합
+            diffEl.innerHTML = `- 변동없음`;
+            diffEl.className = "text-sm font-black flex items-center gap-0.5 text-gray-500 bg-gray-100 px-2 py-0.5 rounded";
+            priceTomEl.className = "text-3xl font-black text-gray-800";
+            
+            guideBox.className = "p-4 rounded-2xl flex items-start gap-3 transition-colors duration-300 shadow-sm border border-gray-200 bg-gray-50 text-gray-800";
+            guideIcon.innerHTML = `<i class="fa-solid fa-circle-check text-gray-500"></i>`;
+        }
+
+        // 5. Chart.js 렌더링
+        renderChart(data.pastPrices, data.tomorrowPrice);
+    }
+
+    function renderChart(pastPrices, tomorrowPrice) {
+        const chartDataPoints = [...pastPrices, tomorrowPrice];
+        
+        if (priceChart) priceChart.destroy();
+
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        
+        // 그라데이션 채우기 효과
+        const gradientFill = ctx.createLinearGradient(0, 0, 0, 300);
+        gradientFill.addColorStop(0, 'rgba(34, 197, 94, 0.2)'); // Tailwind green-500
+        gradientFill.addColorStop(1, 'rgba(34, 197, 94, 0)');
+
+        priceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: '가격',
+                    data: chartDataPoints,
+                    fill: true,
+                    backgroundColor: gradientFill,
+                    borderColor: '#22c55e', // green-500
+                    borderWidth: 2,
+                    pointBackgroundColor: chartDataPoints.map((_, i) => i === chartDataPoints.length - 1 ? '#a855f7' : '#ffffff'),
+                    pointBorderColor: chartDataPoints.map((_, i) => i === chartDataPoints.length - 1 ? '#a855f7' : '#22c55e'),
+                    pointBorderWidth: 2,
+                    pointRadius: chartDataPoints.map((_, i) => i === chartDataPoints.length - 1 ? 5 : (i === chartDataPoints.length - 2 ? 4 : 0)),
+                    pointHoverRadius: 6,
+                    tension: 0.3, // 부드러운 곡선
+                    segment: {
+                        borderColor: ctx => ctx.p0DataIndex === chartDataPoints.length - 2 ? '#a855f7' : '#22c55e', // 예측 구간 보라색
+                        borderDash: ctx => ctx.p0DataIndex === chartDataPoints.length - 2 ? [5, 5] : undefined, // 예측 구간 점선
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        padding: 10,
+                        titleFont: { family: 'Noto Sans KR', size: 12 },
+                        bodyFont: { family: 'Noto Sans KR', size: 14, weight: 'bold' },
+                        callbacks: {
+                            label: context => context.parsed.y.toLocaleString() + '원'
+                        },
+                        displayColors: false
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: { callback: value => value.toLocaleString(), font: { size: 11, family: 'Noto Sans KR' } },
+                        grid: { color: '#f3f4f6', drawBorder: false },
+                        border: { display: false }
+                    },
+                    x: {
+                        ticks: { 
+                            font: { size: 10, family: 'Noto Sans KR' },
+                            maxTicksLimit: 7,
+                            color: context => context.tick.label === '내일(AI)' ? '#a855f7' : '#6b7280',
+                            font: context => context.tick.label === '내일(AI)' ? {weight: 'bold', size: 11} : {size: 10}
+                        },
+                        grid: { display: false },
+                        border: { display: false }
+                    }
+                },
+                interaction: { intersect: false, mode: 'index' }
+            }
+        });
+    }
+
+    // 초기 로딩 시 '배추' 데이터 로드
+    window.onload = () => {
+        loadCropData('cabbage');
+        updateSyncStatus();
+        
+        // 현재 시간 세팅
+        const now = new Date();
+        document.getElementById('update-time').innerText = `오늘 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} 기준`;
+    };
+</script>
+
+</body>
+</html>
